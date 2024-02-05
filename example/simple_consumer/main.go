@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/sami-bre/dsp_mq/client"
 )
 
@@ -31,6 +32,8 @@ func main() {
 	var ch *client.Channel
 	ch, err = conn.Bind(*queue, "", true)
 
-	msg := ch.GetMsg()
-	println("get msg: ", string(msg))
+	for {
+		msg := ch.GetMsg()
+		fmt.Println("Received message:", string(msg))
+	}
 }
