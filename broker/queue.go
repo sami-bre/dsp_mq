@@ -43,6 +43,8 @@ type queue struct {
 
 	// lastPushId is the ID of the last pushed message in this queue.
 	lastPushId int64
+
+	replicas []*queue
 }
 
 // newQueue creates a new queue with the given name and returns a pointer to it.
@@ -64,6 +66,8 @@ func newQueue(qs *queues, name string) *queue {
 	rq.waitingAcks = make(map[*channel]struct{})
 
 	rq.ch = make(chan func(), 32)
+
+	rq.replicas = make([]*queue, 10)
 
 	go rq.run()
 
@@ -175,6 +179,11 @@ func (rq *queue) Push(m *msg) {
 	}
 
 	rq.ch <- f
+
+	// Push the message to all the replicated queues
+	for _, replica := range rq.replicas {
+		replica.Push(m)
+	}
 }
 
 // getMsg retrieves the next message from the queue.
@@ -203,7 +212,41 @@ func (rq *queue) getMsg() (*msg, error) {
 		}
 	}
 
+	// Compare front messages of two random replicas
+	for _, replica := range rq.replicas {
+		if replica != rq {
+			replicaMsg, replicaErr := replica.store.Front(replica.name)
+			if replicaErr != nil {
+				return nil, replicaErr
+			} else if replicaMsg != nil && replicaMsg.id != m.id {
+				// Replica has a different front message, initiate voting
+				rq.replicaVote(replica)
+				break
+			}
+		}
+	}
+
 	return m, nil
+}
+
+// replicaVote initiates a voting process between the current queue and a replica.
+// It compares the front messages of the two queues and syncs them based on the majority vote.
+func (rq *queue) replicaVote(replica *queue) {
+	rqFrontMsg, rqErr := rq.store.Front(rq.name)
+	replicaFrontMsg, replicaErr := replica.store.Front(replica.name)
+
+	if rqErr != nil || replicaErr != nil {
+		return
+	}
+
+	if rqFrontMsg != nil && replicaFrontMsg != nil && rqFrontMsg.id != replicaFrontMsg.id {
+		// Majority vote to sync the queues
+		if rqFrontMsg.id > replicaFrontMsg.id {
+			replica.store.Sync(replica.name, int(rqFrontMsg.id))
+		} else {
+			rq.store.Sync(rq.name, int(replicaFrontMsg.id))
+		}
+	}
 }
 
 // push pushes a message from the queue to the appropriate channels.

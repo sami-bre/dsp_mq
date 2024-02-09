@@ -176,6 +176,23 @@ func (s *MemStore) Front(queue string) (*msg, error) {
 	}
 }
 
+
+func (s *MemStore) Sync(queueName string, msgID int) error {
+	for {
+		frontMsg, err := s.Front(queueName)
+		if err != nil {
+			return err
+		}
+		if frontMsg == nil || frontMsg.id == int64(msgID) {
+			break
+		}
+		if err := s.Delete(queueName, frontMsg.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // init is a special function in Go that is automatically called when the package is initialized.
 // It registers the "mem" store driver with the MemStoreDriver implementation.
 func init() {

@@ -35,6 +35,22 @@ func (d RedisStoreDriver) Open(jsonConfig json.RawMessage) (Store, error) {
 	return newRedisStore(jsonConfig)
 }
 
+func (s *RedisStore) Sync(queueName string, msgID int) error {
+	for {
+		frontMsg, err := s.Front(queueName)
+		if err != nil {
+			return err
+		}
+		if frontMsg == nil || frontMsg.id == int64(msgID) {
+			break
+		}
+		if err := s.Delete(queueName, frontMsg.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // newRedisStore creates a new instance of RedisStore using the provided JSON configuration.
 // It returns a pointer to RedisStore and an error if any.
 func newRedisStore(jsonConfig json.RawMessage) (*RedisStore, error) {

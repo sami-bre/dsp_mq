@@ -18,6 +18,7 @@ type Store interface {
 	Pop(queue string) error
 	Front(queue string) (*msg, error)
 	Len(queue string) (int, error)
+	Sync(queueName string, msgID int) error
 }
 
 // stores is a map that holds instances of StoreDriver.

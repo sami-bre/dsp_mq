@@ -82,6 +82,7 @@ func (c *conn) handlePublish(p *proto.Proto) error {
 	}
 
 	q := c.app.qs.Get(queue)
+	
 	q.Push(msg)
 
 	np := proto.NewPublishOKProto(strconv.FormatInt(msg.id, 10))
